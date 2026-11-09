@@ -6,7 +6,7 @@ A small Windows tray app that lets you choose what the extra buttons on your mou
 It works the same whether the mouse is connected by 2.4G receiver, Bluetooth or USB, because it changes what Windows
 does with a button press, not how the mouse talks to the PC. No driver, no account, no internet.
 
-> **Status:** version 1.0.0, tested on one mouse: the
+> **Status:** version 1.0.1, tested on one mouse: the
 > **Amazon Basics Pro Series 2.4G + Bluetooth + USB Triple Mode Wireless Ergonomic Mouse** (9 buttons, black),
 > connected through its USB receiver or cable (Windows lists it as USB device `3151:5031`), on Windows 11.
 > **Not tested:** Bluetooth mode, other mice, Windows 10. See [Compatibility](#compatibility).
