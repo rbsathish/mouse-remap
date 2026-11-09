@@ -4,6 +4,12 @@ All notable changes to this project are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+- Documentation: state the exact mouse the app was tested on, what was and was not tested, and a compatibility
+  table for other mice.
+
 ## [1.0.0] - 2026-11-09
 
 First release.

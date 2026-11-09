@@ -6,9 +6,12 @@ A small Windows tray app that lets you choose what the extra buttons on your mou
 It works the same whether the mouse is connected by 2.4G receiver, Bluetooth or USB, because it changes what Windows
 does with a button press, not how the mouse talks to the PC. No driver, no account, no internet.
 
-> **Status:** version 1.0.0. Built and tested on an Amazon Basics Pro Series triple-mode ergonomic mouse
-> (shows up in Windows as USB device `3151:5031`). Other mice work for the five standard buttons; the three top
-> buttons are specific to mice that behave like this one (see [Other mice](#other-mice)).
+> **Status:** version 1.0.0, tested on one mouse: the
+> **Amazon Basics Pro Series 2.4G + Bluetooth + USB Triple Mode Wireless Ergonomic Mouse** (9 buttons, black),
+> connected through its USB receiver or cable (Windows lists it as USB device `3151:5031`), on Windows 11.
+> **Not tested:** Bluetooth mode, other mice, Windows 10. See [Compatibility](#compatibility).
+>
+> This is an independent project, not affiliated with or endorsed by Amazon.
 
 ## What you can remap
 
@@ -89,13 +92,24 @@ is rejected with a message when you click **Apply and save**.
 Untick **Start with Windows** and click **Apply and save**, quit from the tray menu, then delete the folder you unzipped
 and `%APPDATA%\MouseRemap`.
 
-## Other mice
+## Compatibility
 
-The five standard buttons (left, right, middle, back, forward) work with any mouse. The three top-button entries rely on
-this mouse's particular design: it contains a small keyboard inside, which sends **Shift+Win+F23**, **Print Screen** and
-**Win+D** for those buttons, and the app tells it apart from your real keyboard by that built-in device. Mice built the same
-way should work, but the exact keys may differ. To see what your extra buttons send, run `tools\check_buttons.bat`
-(from a source checkout): it listens for 30 seconds and prints what Windows received, without recording normal typing.
+This app was built and tested for one mouse (see the status note at the top). It is **not** a universal mouse driver.
+
+| | Works on | Tested |
+|---|---|---|
+| Left, right, middle, back, forward | Should work on any mouse whose buttons Windows reports as standard buttons | Only on the mouse above |
+| Top **Search / Screenshot / Desktop** buttons | Only mice built like this one: a keyboard hidden inside the mouse that sends exactly **Shift+Win+F23**, **Print Screen** and **Win+D** for those buttons. On any other mouse these three settings do nothing and nothing breaks | Only on the mouse above |
+| Extra buttons beyond those (gaming mice with 7 to 12 buttons, DPI or profile buttons) | Not supported. They are usually handled by the maker's driver or inside the mouse | No |
+| Connection | USB receiver / cable | Bluetooth mode not tested; it should behave the same because the app acts on what Windows receives |
+| Windows | 64-bit Windows 10 and 11 | Windows 11 only. Not macOS or Linux |
+
+**Mouse-maker software** (Logitech Options, Razer Synapse and similar) may already remap buttons itself. If both remap the
+same button, they can conflict: turn one off.
+
+To find out what your extra buttons send, run `tools\check_buttons.bat` from a source checkout. It listens for 30
+seconds and prints what Windows received, without recording normal typing. If your mouse sends something this app
+doesn't know about, that tells you why a button isn't recognised.
 
 ## Build from source
 
