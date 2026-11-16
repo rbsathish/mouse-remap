@@ -64,6 +64,17 @@ Join keys with `+`, modifiers first: `ctrl+shift+t`, `alt+left`, `win+d`.
 Leave the box empty (or choose **Normal**) to keep a button's usual behaviour. A combination that can't be understood
 is rejected with a message when you click **Apply and save**.
 
+## DPI level display
+
+The settings window and the tray icon's tooltip show the mouse's **DPI level** (1, 2, 3 ...) each time you press the
+mouse's DPI button. A few limits:
+
+- It shows the mouse's own level number, not a DPI value such as 1600, and it can't know the level when the app starts,
+  only after the first press ("press the DPI button to show it").
+- It only listens; the app never sends anything to the mouse, so it cannot change the DPI.
+- Tested on the one mouse listed above, through its receiver or cable. In Bluetooth mode, or with other mice, the
+  window says the level is not available.
+
 ## Good to know
 
 - **Left/right safety.** Changing a left or right button asks you to confirm. While the settings window is in front they
@@ -84,6 +95,8 @@ is rejected with a message when you click **Apply and save**.
   mouse hook sees each button press and the keyboard hook sees each key press. They look at which button or key it is,
   act only on the ones you mapped (for the keyboard hook: F23, Print Screen and Win+D, and only if a top button is
   mapped), and store nothing.
+- The DPI display opens the mouse's vendor HID interface read-only, to receive the mouse's own DPI-level messages.
+  Nothing is sent to the mouse and nothing is stored.
 - The only things written to disk are `config.json` and, if you tick *Start with Windows*, one registry value under
   `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` named `MouseRemap`.
 

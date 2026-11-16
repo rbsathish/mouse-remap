@@ -538,6 +538,176 @@ class TopButtonHook(MouseHook):
         self._sender(combo)
 
 
+# ---------------------------------------------------------------- DPI level (the mouse's vendor HID channel)
+#
+# The mouse reports its DPI level on a vendor-defined HID interface (usage page 0xFFFF, 4-byte input reports) every
+# time the DPI button is pressed: 05 0C <level> 00, where <level> counts 0, 1, 2, 3 ... This is read-only: nothing is
+# ever sent to the mouse. The level number is the mouse's own setting index, not a DPI value, and the current level
+# can't be read at startup, only noticed when the button is pressed. Worked out by observation on the one mouse this
+# app is tested with, so it is only looked for on that mouse (3151:5031).
+
+DPI_VID_PID = ("3151", "5031")
+HID_VENDOR_PAGE = 0xFFFF
+DPI_REPORT_SIZE = 4
+DPI_REPORT_ID, DPI_LEVEL_CODE = 0x05, 0x0C
+DIGCF_PRESENT, DIGCF_DEVICEINTERFACE = 0x02, 0x10
+INVALID_HANDLE = ctypes.c_void_p(-1).value
+
+setupapi = ctypes.WinDLL("setupapi", use_last_error=True)
+hid_dll = ctypes.WinDLL("hid", use_last_error=True)
+
+
+class GUID(ctypes.Structure):
+    _fields_ = [("Data1", wintypes.DWORD), ("Data2", wintypes.WORD), ("Data3", wintypes.WORD),
+                ("Data4", ctypes.c_ubyte * 8)]
+
+
+class SP_DEVICE_INTERFACE_DATA(ctypes.Structure):
+    _fields_ = [("cbSize", wintypes.DWORD), ("InterfaceClassGuid", GUID), ("Flags", wintypes.DWORD),
+                ("Reserved", ctypes.c_void_p)]
+
+
+class HIDP_CAPS(ctypes.Structure):
+    _fields_ = [("Usage", wintypes.USHORT), ("UsagePage", wintypes.USHORT),
+                ("InputReportByteLength", wintypes.USHORT), ("OutputReportByteLength", wintypes.USHORT),
+                ("FeatureReportByteLength", wintypes.USHORT), ("Reserved", wintypes.USHORT * 17),
+                ("Counts", wintypes.USHORT * 10)]     # link nodes and button/value caps; unused here
+
+
+hid_dll.HidD_GetHidGuid.argtypes = [ctypes.POINTER(GUID)]
+hid_dll.HidD_GetPreparsedData.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_void_p)]
+hid_dll.HidD_GetPreparsedData.restype = wintypes.BOOLEAN
+hid_dll.HidD_FreePreparsedData.argtypes = [ctypes.c_void_p]
+hid_dll.HidP_GetCaps.argtypes = [ctypes.c_void_p, ctypes.POINTER(HIDP_CAPS)]
+setupapi.SetupDiGetClassDevsW.argtypes = [ctypes.POINTER(GUID), wintypes.LPCWSTR, wintypes.HWND, wintypes.DWORD]
+setupapi.SetupDiGetClassDevsW.restype = ctypes.c_void_p
+setupapi.SetupDiEnumDeviceInterfaces.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.POINTER(GUID),
+                                                 wintypes.DWORD, ctypes.POINTER(SP_DEVICE_INTERFACE_DATA)]
+setupapi.SetupDiGetDeviceInterfaceDetailW.argtypes = [ctypes.c_void_p, ctypes.POINTER(SP_DEVICE_INTERFACE_DATA),
+                                                      ctypes.c_void_p, wintypes.DWORD,
+                                                      ctypes.POINTER(wintypes.DWORD), ctypes.c_void_p]
+setupapi.SetupDiDestroyDeviceInfoList.argtypes = [ctypes.c_void_p]
+kernel32.CreateFileW.argtypes = [wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD, ctypes.c_void_p,
+                                 wintypes.DWORD, wintypes.DWORD, ctypes.c_void_p]
+kernel32.CreateFileW.restype = ctypes.c_void_p
+kernel32.ReadFile.argtypes = [ctypes.c_void_p, ctypes.c_void_p, wintypes.DWORD,
+                              ctypes.POINTER(wintypes.DWORD), ctypes.c_void_p]
+kernel32.CancelIoEx.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+
+
+def parse_dpi_levels(data):
+    """DPI levels (1-based, as printed on most mice) announced by a chunk of input-report bytes, in order."""
+    levels = []
+    for i in range(0, len(data) - DPI_REPORT_SIZE + 1, DPI_REPORT_SIZE):   # Windows may hand back several at once
+        if data[i] == DPI_REPORT_ID and data[i + 1] == DPI_LEVEL_CODE:
+            levels.append(data[i + 2] + 1)
+    return levels
+
+
+def _open_hid(path, access):
+    handle = kernel32.CreateFileW(path, access, 3, None, 3, 0, None)    # share read+write, OPEN_EXISTING
+    return None if handle in (None, INVALID_HANDLE) else handle
+
+
+def _is_dpi_channel(path):
+    """True for the vendor interface that carries the DPI reports (queried with no access rights; nothing is read)."""
+    handle = _open_hid(path, 0)
+    if handle is None:
+        return False
+    try:
+        pre = ctypes.c_void_p()
+        if not hid_dll.HidD_GetPreparsedData(handle, ctypes.byref(pre)):
+            return False
+        try:
+            caps = HIDP_CAPS()
+            hid_dll.HidP_GetCaps(pre, ctypes.byref(caps))
+            return caps.UsagePage == HID_VENDOR_PAGE and caps.InputReportByteLength == DPI_REPORT_SIZE
+        finally:
+            hid_dll.HidD_FreePreparsedData(pre)
+    finally:
+        kernel32.CloseHandle(handle)
+
+
+def find_dpi_channel():
+    """Device path of the mouse's DPI channel, or None if that mouse isn't connected in a way that exposes one."""
+    guid = GUID()
+    hid_dll.HidD_GetHidGuid(ctypes.byref(guid))
+    info = setupapi.SetupDiGetClassDevsW(ctypes.byref(guid), None, None, DIGCF_PRESENT | DIGCF_DEVICEINTERFACE)
+    if info in (None, INVALID_HANDLE):
+        return None
+    try:
+        index = 0
+        while True:
+            data = SP_DEVICE_INTERFACE_DATA()
+            data.cbSize = ctypes.sizeof(data)
+            if not setupapi.SetupDiEnumDeviceInterfaces(info, None, ctypes.byref(guid), index, ctypes.byref(data)):
+                return None
+            index += 1
+            size = wintypes.DWORD(0)
+            setupapi.SetupDiGetDeviceInterfaceDetailW(info, ctypes.byref(data), None, 0, ctypes.byref(size), None)
+            buf = ctypes.create_string_buffer(size.value)
+            # first field of the detail struct is its own size: 8 on 64-bit Windows, 6 on 32-bit
+            ctypes.cast(buf, ctypes.POINTER(wintypes.DWORD))[0] = 8 if ctypes.sizeof(ctypes.c_void_p) == 8 else 6
+            if not setupapi.SetupDiGetDeviceInterfaceDetailW(info, ctypes.byref(data), buf, size.value, None, None):
+                continue
+            path = ctypes.wstring_at(ctypes.addressof(buf) + 4)
+            if vid_pid(path) == DPI_VID_PID and _is_dpi_channel(path):
+                return path
+    finally:
+        setupapi.SetupDiDestroyDeviceInfoList(info)
+
+
+class DpiMonitor:
+    """Watches the mouse's DPI channel in a background thread. `level` is the last DPI level announced (1-based) or
+    None if the button hasn't been pressed yet; `connected` says whether the channel is currently open."""
+    RETRY_SECONDS = 3
+
+    def __init__(self, finder=find_dpi_channel):
+        self.level = None
+        self.connected = False
+        self._finder = finder
+        self._stop = threading.Event()
+        self._handle = None
+        self._thread = threading.Thread(target=self._run, name="dpi-monitor", daemon=True)
+
+    def start(self):
+        self._thread.start()
+
+    def stop(self):
+        self._stop.set()
+        handle = self._handle
+        if handle:
+            kernel32.CancelIoEx(handle, None)     # wakes the blocked read so the thread can exit
+
+    def _run(self):
+        while not self._stop.is_set():
+            try:
+                path = self._finder()
+                handle = _open_hid(path, 0x80000000) if path else None    # GENERIC_READ
+            except OSError:
+                path = handle = None
+            if handle is None:
+                self.connected = False
+                self._stop.wait(self.RETRY_SECONDS)       # mouse not there (other mode / unplugged): look again later
+                continue
+            self._handle, self.connected = handle, True
+            try:
+                self._read_loop(handle)
+            finally:
+                self._handle, self.connected = None, False
+                kernel32.CloseHandle(handle)
+            self._stop.wait(1)
+
+    def _read_loop(self, handle):
+        buf = ctypes.create_string_buffer(64)
+        got = wintypes.DWORD(0)
+        while not self._stop.is_set():
+            if not kernel32.ReadFile(handle, buf, len(buf), ctypes.byref(got), None):
+                return                                    # device went away (or we were stopped)
+            for level in parse_dpi_levels(buf.raw[:got.value]):
+                self.level = level
+
+
 # ---------------------------------------------------------------- config + autostart
 
 ALL_BUTTONS = BUTTONS + TOP_BUTTONS
@@ -621,6 +791,9 @@ class App:
         self.tagger.start()
         self.top_hook = TopButtonHook(self.tagger)
         self.hooks = (self.hook, self.top_hook)
+        self.dpi = DpiMonitor()
+        self.dpi.start()
+        self._dpi_shown = (None, None)
         mapping = {k: parse_combo(v) for k, v in self.cfg["buttons"].items() if self._valid(v)}
         for h in self.hooks:
             h.enabled = self.cfg["enabled"]
@@ -690,10 +863,19 @@ class App:
         self.status.grid(row=row + 3, column=1, sticky="w", **pad)
         self.seen = ttk.Label(frame, text="Last button Windows saw: (press one)", foreground="#555")
         self.seen.grid(row=row + 4, column=0, columnspan=2, sticky="w", padx=10, pady=(10, 0))
+        self.dpi_label = ttk.Label(frame, text=self._dpi_text(), foreground="#555")
+        self.dpi_label.grid(row=row + 5, column=0, columnspan=2, sticky="w", padx=10, pady=(4, 0))
         ttk.Label(frame, text="Closing this window keeps it running in the tray.",
-                  foreground="#555").grid(row=row + 5, column=0, columnspan=2, sticky="w", padx=10)
+                  foreground="#555").grid(row=row + 6, column=0, columnspan=2, sticky="w", padx=10, pady=(10, 0))
         ttk.Label(frame, text=f"Version {__version__}", foreground="#888").grid(
-            row=row + 6, column=0, columnspan=2, sticky="w", padx=10, pady=(6, 0))
+            row=row + 7, column=0, columnspan=2, sticky="w", padx=10, pady=(6, 0))
+
+    def _dpi_text(self):
+        if not self.dpi.connected:
+            return "DPI level: not available (mouse not found on its receiver or cable)"
+        if self.dpi.level is None:
+            return "DPI level: press the DPI button to show it"
+        return f"DPI level: {self.dpi.level}  (the mouse's own level number, changes when you press the DPI button)"
 
     def _combo_text(self, key):
         text = self.combos[key].get().strip()
@@ -759,6 +941,11 @@ class App:
                     return
         except queue.Empty:
             pass
+        state = (self.dpi.connected, self.dpi.level)
+        if state != self._dpi_shown:
+            self._dpi_shown = state
+            self.dpi_label.config(text=self._dpi_text())
+            self.tray.title = f"Mouse Button Remap {__version__}" +                 (f" - DPI level {self.dpi.level}" if self.dpi.connected and self.dpi.level else "")
         for h in self.hooks:   # show whichever hook saw something new
             if h.last_seen and h.last_seen != self._shown.get(id(h)):
                 self._shown[id(h)] = h.last_seen
@@ -769,6 +956,7 @@ class App:
         for h in self.hooks:
             h.stop()
         self.tagger.stop()
+        self.dpi.stop()
         self.tray.stop()
         self.root.destroy()
 

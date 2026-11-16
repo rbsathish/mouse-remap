@@ -4,6 +4,14 @@ All notable changes to this project are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+- Shows the mouse's **DPI level** in the settings window and the tray tooltip, updated whenever the DPI button is
+  pressed. It only listens to the mouse (nothing is sent to it), shows the mouse's own level number rather than a DPI
+  value, and can't know the level until the button has been pressed once. Works with the tested mouse only, on its
+  receiver or cable.
+
 ## [1.0.1] - 2026-11-09
 
 Documentation release. The app behaves exactly as in 1.0.0; the version number and the README bundled in the zip are
