@@ -89,6 +89,9 @@ The app (`TopButtonHook` with `RawKeyTagger`) identifies the source using only s
   presses, the left/right guard, and a real end-to-end copy and paste.
 - `tests/test_top_buttons.py` (34 checks): the top-button logic driven event by event with a stand-in for the device
   lookup (no real keyboard hook installed), the device lookup itself, and a scan of this PC's devices.
+- `tests/test_dpi.py` (14 checks): parsing of the DPI-level reports and the monitor's behaviour when the mouse is
+  absent or the device lookup fails. `tools/live_dpi_test.py` was run against the real mouse and showed levels 1, 2, 3
+  as the DPI button was pressed.
 - `tools/live_top_test.py`: installs the real hooks on the real mouse and only logs what it would send. Three live trials
   were run. The first two exposed the problems described in section 2; the third matched expectations (mouse Screenshot
   presses recognised as the mouse, keyboard Print Screen recognised as not the mouse and replayed, Search and Desktop
@@ -104,6 +107,12 @@ background app.
 - **Start with Windows:** one registry value, `HKCU\Software\Microsoft\Windows\CurrentVersion\Run\MouseRemap`, running the
   exe with `--minimized`. It is per user and needs no administrator rights. It is not a Windows service, because a
   service runs in a separate session and cannot send keystrokes into your programs.
+- **DPI level:** the mouse announces its DPI level on a vendor-defined HID interface (usage page `0xFFFF`, 4-byte input
+  reports) as `05 0C <index> 00` each time the DPI button is pressed. A background thread finds that interface (only for
+  this mouse's USB id), opens it read-only and shows `index + 1`. Nothing is ever sent to the mouse. The format was found
+  by listening while pressing the button, not from documentation, so it is only trusted for this mouse. The level can't
+  be known until the button has been pressed once, and no battery or real DPI value is available: the mouse's other
+  vendor interface (64-byte feature reports) answers reads with zeros, and its command format is unknown.
 - **Single instance:** a named mutex. A second launch signals a named event that makes the running copy show its window.
 - **DPI awareness** is switched on so the window is sharp on scaled displays.
 
@@ -111,5 +120,6 @@ background app.
 
 - Applications running as administrator ignore keys injected by a normal-rights process, and the sign-in screen is a
   different desktop. Run the app as administrator if you need it to apply to elevated programs.
-- Buttons handled by the mouse's firmware (DPI, mode switch) are invisible to Windows.
+- The mode switch is handled by the mouse's firmware and is invisible to Windows. The DPI button's level is visible (see
+  section 4) but its actual DPI value, setting the DPI, and the battery level are not available.
 - The three top-button identities (F23, Print Screen, D) were measured on one mouse model.

@@ -765,7 +765,7 @@ PRESETS = [
     ("Browser back", "alt+left"), ("Browser forward", "alt+right"),
     ("Enter", "enter"), ("Escape", "esc"), ("Delete", "delete"),
     ("Show desktop", "win+d"), ("Screenshot (Snip)", "win+shift+s"), ("Print Screen", "printscreen"),
-    ("Windows Search", "win+s"), ("Task view", "win+tab"), ("File Explorer", "win+e"),
+    ("Clipboard history", "win+v"), ("Windows Search", "win+s"), ("Task view", "win+tab"), ("File Explorer", "win+e"),
     ("Run box", "win+r"), ("Lock PC", "win+l"),
     ("Mute", "volume_mute"), ("Volume up", "volume_up"), ("Volume down", "volume_down"),
     ("Play / pause", "media_play_pause"), ("Next track", "media_next"), ("Previous track", "media_prev"),

@@ -44,6 +44,9 @@ results.append(check("ctrl+shift+t order", mr.parse_combo("Ctrl + Shift + T") ==
 results.append(check("alt+left", mr.parse_combo("alt+left") == (0xA4, 0x25)))
 results.append(check("f5 and media key", mr.parse_combo("f5") == (0x74,) and mr.parse_combo("media_next") == (0xB0,)))
 results.append(check("empty means leave alone", mr.parse_combo("") == () and mr.parse_combo("   ") == ()))
+results.append(check("every preset parses", all(isinstance(mr.parse_combo(c), tuple) for _, c in mr.PRESETS)))
+results.append(check("Clipboard history preset is Win+V",
+                     mr.PRESET_BY_NAME["Clipboard history"] == "win+v" and mr.parse_combo("win+v") == (0x5B, 0x56)))
 for bad in ("ctrl+", "a+b", "ctrl+banana", "f99", "+"):
     try:
         mr.parse_combo(bad)
